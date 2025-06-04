@@ -15,8 +15,9 @@
 ```  
 
 4. Save your change using vscode/notepad++
-5. Type command: python takeout_fix_turbo.py in cmd/powershell  
+5. Type command: python takeout_fix_turbo.py in cmd/powershell
 
+> Additional Notes:  
 - Script should walk through all your sub directories and apply changes
 - Script only updates Date Taken time, which is photoTakenTime in your .json
 
