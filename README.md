@@ -12,8 +12,8 @@
     directory = r"C:\Takeout"  # Change this to your target directory
     max_workers = min(cpu_count(), 8)  # Limit to avoid overwhelming exiftool
     # --------------- Configuration --------------- #
-```
-\
+```  
+
 4. Save your change using vscode/notepad++
 5. Type command: python takeout_fix_turbo.py in cmd/powershell  
 
