@@ -5,7 +5,6 @@
 1. Put all the files into your C:\ dir
 2. Open up your windows powershell/cmd
 3. Edit script to change the directory section, see below:
-
 \
 
 ```py
