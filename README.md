@@ -18,7 +18,7 @@
 5. Type command: python takeout_fix_turbo.py in cmd/powershell
 6. Script should walk through all your sub directories and apply changes
 7. Script only updates Date Taken time, which is photoTakenTime in your .json
-
-> All cedit for exiftool goes to [exifTool]((https://exiftool.org/)).
+\
+All cedit for exiftool goes to [exifTool]((https://exiftool.org/)).
 
 
