@@ -18,6 +18,6 @@
 - Script should walk through all your sub directories and apply changes
 - Script only updates Date Taken time, which is photoTakenTime in your .json  
 
-All credit for **exiftool** goes to [ExifTool](https://exiftool.org/) by Phil Harvey
+All credit for [ExifTool](https://exiftool.org/) goes to Phil Harvey
 
 
