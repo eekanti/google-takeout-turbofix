@@ -1,4 +1,4 @@
-# Google Takeout Fixer w/ multiprocessing
+# Google Takeout Fixer
 > Simple script that merges your .json metadata from takeout into your img/video files
 
 **How does it work?**
