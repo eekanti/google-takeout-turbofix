@@ -1,5 +1,3 @@
-# Google Takeout Fixer
-> Simple script that merges your .json metadata from takeout into your img/video files
 
 **How does it work?**
 1. Put all the files into your C:\ dir
