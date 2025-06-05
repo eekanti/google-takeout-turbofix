@@ -196,7 +196,10 @@ def main():
     directory = r"C:\Takeout"  # Change this to your target directory
     max_workers = min(cpu_count(), 8)  # Limit to avoid overwhelming exiftool
     # --------------- Configuration --------------- #
+<<<<<<< HEAD
     
+=======
+>>>>>>> e8693b866aa7fe7a154122322ad039f6f70a6daf
     log_message("INFO: Starting TURBO Windows Date Taken fix")
     log_message("INFO: Current user: eekanti")
     log_message("INFO: Current UTC time: 2025-06-03 22:40:54")
