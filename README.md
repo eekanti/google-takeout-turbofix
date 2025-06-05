@@ -1,5 +1,3 @@
-# Immich Google Takeout Date Fix - Turbo Edition
-
 A high-performance Python script that fixes photo and video dates from Google Takeout for perfect Immich compatibility. This tool ensures all your media files have correct dates by syncing EXIF metadata with Google's JSON photoTakenTime data.
 
 ## 🚀 Features
