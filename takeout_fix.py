@@ -2,12 +2,14 @@ import os
 import json
 import subprocess
 import glob
+import sys
+import argparse
 from datetime import datetime
 from multiprocessing import Pool, cpu_count
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import time
 from functools import partial
-from pathlib import Path  # Add this import
+from pathlib import Path
 
 def log_message(message):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -175,7 +177,7 @@ def scan_directory_fast(directory):
     """ULTRA-FAST directory scanning with pathlib"""
     log_message("INFO: Ultra-fast scanning directory structure...")
     
-    image_extensions = {'.dng', '.jpg', '.jpeg', '.png', '.heic', '.heif', '.tiff', '.webp', '.bmp', '.mp4', '.gif', '.3gpp'}
+    image_extensions = {'.dng', '.jpg', '.jpeg', '.png', '.heic', '.heif', '.tiff', '.webp', '.mov', '.mp4', '.gif', '.3gpp'}
     image_files = []
     
     start_time = time.time()
@@ -234,20 +236,55 @@ def find_image_json_pairs_fast(image_files):
     return pairs
 
 def main():
-    """TURBO-OPTIMIZED main function - FORCE OVERWRITE MODE"""
+    """TURBO-OPTIMIZED main function - FORCE OVERWRITE MODE with CLI support"""
     
-    # ----------- Path Configuration ----------- #
-    # ----------- Path Configuration ----------- #
-    # ----------- Path Configuration ----------- #
-    directory = r"C:\GP"
-    max_workers = min(cpu_count(), 12)
-    # ----------- Path Configuration ----------- #
-    # ----------- Path Configuration ----------- #
-    # ----------- Path Configuration ----------- #
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='Fast Google Takeout date fix for Immich compatibility',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=''',
+Examples:
+  python takeout_fix.py "C:\Google\Takeout"
+  python takeout_fix.py "C:\Google\Takeout" --workers 8
+  python takeout_fix.py "/path/to/takeout" --workers 16
+  python takeout_fix.py --help
+        '''
+    )
+    
+    parser.add_argument(
+        'directory',
+        help='Directory containing Google Takeout photos and JSON files'
+    )
+    
+    parser.add_argument(
+        '--workers', '-w',
+        type=int,
+        default=min(cpu_count(), 12),
+        help=f'Number of parallel workers (default: {min(cpu_count(), 12)})'
+    )
+    
+    parser.add_argument(
+        '--max-workers',
+        type=int,
+        default=None,
+        help='Override maximum worker limit (advanced users only)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Configuration from command line arguments
+    directory = args.directory
+    
+    # Worker configuration with safety limits
+    if args.max_workers:
+        max_workers = min(args.max_workers, 32)  # Hard limit for safety
+    else:
+        max_workers = min(args.workers, cpu_count() * 2)  # Reasonable default
 
     log_message("INFO: ==========================================")
     log_message("INFO: IMMICH TAKEOUT DATE FORCE OVERWRITE MODE")
     log_message("INFO: ==========================================")
+    log_message(f"INFO: Target directory: {directory}")
     log_message(f"INFO: Using {max_workers} parallel workers")
     log_message(f"INFO: CPU count: {cpu_count()}")
     log_message("INFO: 🎯 FORCE OVERWRITE MODE ENABLED:")
@@ -259,6 +296,16 @@ def main():
     log_message("INFO:   ✅ Comprehensive date field coverage")
     log_message("INFO:   ✅ SubSecond precision support")
     
+    # Validate directory exists
+    if not os.path.exists(directory):
+        log_message(f"ERROR: Directory not found: {directory}")
+        log_message("ERROR: Please check the path and try again.")
+        sys.exit(1)
+    
+    if not os.path.isdir(directory):
+        log_message(f"ERROR: Path is not a directory: {directory}")
+        sys.exit(1)
+    
     # Quick exiftool test
     try:
         result = subprocess.run(['exiftool', '-ver'], capture_output=True, text=True, timeout=3)
@@ -266,14 +313,12 @@ def main():
             log_message(f"INFO: ExifTool version {result.stdout.strip()} found")
         else:
             log_message("ERROR: ExifTool not found")
-            return
+            log_message("ERROR: Please install ExifTool and ensure it's in your PATH")
+            sys.exit(1)
     except:
         log_message("ERROR: ExifTool not available")
-        return
-    
-    if not os.path.exists(directory):
-        log_message(f"ERROR: Directory not found: {directory}")
-        return
+        log_message("ERROR: Please install ExifTool and ensure it's in your PATH")
+        sys.exit(1)
     
     overall_start = time.time()
     
@@ -281,20 +326,23 @@ def main():
     image_files = scan_directory_fast(directory)
     if not image_files:
         log_message("ERROR: No image files found")
-        return
+        log_message(f"ERROR: Searched in: {directory}")
+        log_message("ERROR: Supported formats: .jpg, .jpeg, .png, .heic, .heif, .tiff, .webp, .mov, .mp4, .gif, .3gpp, .dng")
+        sys.exit(1)
     
     # Step 2: Fast JSON pair discovery
     pairs = find_image_json_pairs_fast(image_files)
     if not pairs:
         log_message("ERROR: No image+JSON pairs found")
-        return
+        log_message("ERROR: Make sure your Google Takeout includes JSON metadata files")
+        sys.exit(1)
     
     # Step 3: FORCE OVERWRITE processing
     log_message(f"INFO: FORCE OVERWRITING {len(pairs)} files with JSON photoTakenTime...")
     
     process_args = [(img, json_file, i % max_workers) for i, (img, json_file) in enumerate(pairs)]
     
-    updated_count = 0  # Changed from success_count
+    updated_count = 0
     failed_count = 0
     skipped_count = 0
     
@@ -310,15 +358,15 @@ def main():
             completed += 1
             
             # Count results
-            if result['status'] == 'updated':  # Changed from 'success'
+            if result['status'] == 'updated':
                 updated_count += 1
-                if completed <= 5:  # Show more examples since we're always updating
+                if completed <= 5:
                     log_message(f"UPDATED: {result['file']} -> {result['new_date']}")
             elif result['status'] == 'skipped':
                 skipped_count += 1
             elif result['status'] in ['failed', 'error']:
                 failed_count += 1
-                if failed_count <= 3:  # Show more failures for debugging
+                if failed_count <= 3:
                     log_message(f"ERROR: {result['file']} - {result.get('error', 'Unknown error')}")
             
             # Progress updates
@@ -341,11 +389,22 @@ def main():
     log_message(f"📁 Total images scanned: {len(image_files)}")
     log_message(f"⚡ Processing rate: {len(pairs)/total_time:.1f} files/second")
     log_message(f"🕐 Total time: {total_time:.1f} seconds")
+    log_message(f"📁 Processed directory: {directory}")
     print("="*70)
     
     if updated_count > 0:
         print(f"\n🚀 FORCE OVERWRITE SUCCESS! Updated {updated_count} files in {total_time:.1f} seconds!")
         print(f"📅 All dates now match Google Takeout JSON photoTakenTime!")
+    
+    return 0  # Success exit code
 
 if __name__ == '__main__':
-    main()
+    try:
+        exit_code = main()
+        sys.exit(exit_code)
+    except KeyboardInterrupt:
+        log_message("INFO: Script interrupted by user")
+        sys.exit(130)
+    except Exception as e:
+        log_message(f"FATAL ERROR: {str(e)}")
+        sys.exit(1)
