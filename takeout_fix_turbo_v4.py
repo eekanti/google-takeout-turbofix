@@ -76,29 +76,34 @@ def get_date_from_json(json_path):
         return None, None, None, None
 
 def check_and_update_single_image(args):
-    """Process a single image - FULL IMMICH COMPATIBILITY"""
+    """Process a single image - ALWAYS OVERWRITE with JSON photoTakenTime"""
     image_path, json_path, process_id = args
     
     try:
-        # Get JSON date FIRST (faster than checking current EXIF)
+        # Get JSON date FIRST
         json_date, json_date_subsec, dt_obj, iso_format = get_date_from_json(json_path)
         if not json_date:
             return {'status': 'skipped', 'reason': 'no_json_date', 'file': os.path.basename(image_path)}
         
-        # Only check current date if we have a JSON date
+        # Check current date for logging purposes only
         result = subprocess.run(
-            ['exiftool', '-DateTimeOriginal', '-s3', image_path],  # -s3 is faster than -s -s -s
-            capture_output=True, text=True, timeout=8, check=False  # Reduced timeout, don't raise on non-zero
+            ['exiftool', '-DateTimeOriginal', '-s3', image_path],
+            capture_output=True, text=True, timeout=8, check=False
         )
-        current_date = result.stdout.strip() if result.returncode == 0 else None
+        current_date = result.stdout.strip() if result.returncode == 0 else "Not Set"
         
-        # Skip if already correct (exact match)
-        if current_date == json_date:
-            return {'status': 'already_set', 'file': os.path.basename(image_path)}
+        # ALWAYS UPDATE: Force overwrite with JSON photoTakenTime regardless of current values
+        if current_date != json_date:
+            update_needed = True
+            reason = f"Current: {current_date} -> JSON: {json_date}"
+        else:
+            # Even if dates match, still overwrite to ensure ALL fields are consistent
+            update_needed = True
+            reason = f"Ensuring full consistency: {json_date}"
         
-        # COMPREHENSIVE: Update ALL date fields that Immich might use
+        # FORCE UPDATE: Always overwrite ALL date fields with JSON photoTakenTime
         cmd = [
-            'exiftool', '-overwrite_original', '-P', '-q',  # Added -q for quiet mode
+            'exiftool', '-overwrite_original', '-P', '-q',
             
             # === IMMICH'S PRIMARY DATE TAGS (in priority order) ===
             f'-SubSecDateTimeOriginal={json_date_subsec}',     # #1 Priority
@@ -137,7 +142,7 @@ def check_and_update_single_image(args):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
         
         if result.returncode == 0:
-            # BONUS: Also update filesystem timestamps for maximum compatibility
+            # ALWAYS update filesystem timestamps for maximum Immich compatibility
             try:
                 file_timestamp = dt_obj.timestamp()
                 os.utime(image_path, (file_timestamp, file_timestamp))
@@ -145,10 +150,11 @@ def check_and_update_single_image(args):
                 pass  # Don't fail if filesystem update fails
             
             return {
-                'status': 'success', 
+                'status': 'updated',  # Changed from 'success' to 'updated' 
                 'file': os.path.basename(image_path),
                 'old_date': current_date,
                 'new_date': json_date,
+                'reason': reason,
                 'process_id': process_id
             }
         else:
@@ -228,19 +234,25 @@ def find_image_json_pairs_fast(image_files):
     return pairs
 
 def main():
-    """TURBO-OPTIMIZED main function - FULL IMMICH COMPATIBILITY"""
+    """TURBO-OPTIMIZED main function - FORCE OVERWRITE MODE"""
     
-    # --------------- Configuration --------------- #
+    # ----------- Path Configuration ----------- #
+    # ----------- Path Configuration ----------- #
+    # ----------- Path Configuration ----------- #
     directory = r"C:\GP"
-    max_workers = min(cpu_count(), 12)  # Increased from 8 to 12
-    # --------------- Configuration --------------- #
-    
+    max_workers = min(cpu_count(), 12)
+    # ----------- Path Configuration ----------- #
+    # ----------- Path Configuration ----------- #
+    # ----------- Path Configuration ----------- #
+
     log_message("INFO: ==========================================")
-    log_message("INFO: IMMICH-COMPATIBLE TAKEOUT DATE FIX TURBO")
+    log_message("INFO: IMMICH TAKEOUT DATE FORCE OVERWRITE MODE")
     log_message("INFO: ==========================================")
     log_message(f"INFO: Using {max_workers} parallel workers")
     log_message(f"INFO: CPU count: {cpu_count()}")
-    log_message("INFO: 🎯 FULL IMMICH COMPATIBILITY MODE:")
+    log_message("INFO: 🎯 FORCE OVERWRITE MODE ENABLED:")
+    log_message("INFO:   ⚡ ALWAYS overwrites with JSON photoTakenTime")
+    log_message("INFO:   ⚡ Ignores existing EXIF dates")
     log_message("INFO:   ✅ All 8 Immich priority EXIF tags")
     log_message("INFO:   ✅ Video-specific metadata tags") 
     log_message("INFO:   ✅ Filesystem timestamps")
@@ -277,15 +289,14 @@ def main():
         log_message("ERROR: No image+JSON pairs found")
         return
     
-    # Step 3: Optimized parallel processing
-    log_message(f"INFO: Processing {len(pairs)} files with {max_workers} workers...")
+    # Step 3: FORCE OVERWRITE processing
+    log_message(f"INFO: FORCE OVERWRITING {len(pairs)} files with JSON photoTakenTime...")
     
     process_args = [(img, json_file, i % max_workers) for i, (img, json_file) in enumerate(pairs)]
     
-    success_count = 0
+    updated_count = 0  # Changed from success_count
     failed_count = 0
     skipped_count = 0
-    already_set_count = 0
     
     process_start = time.time()
     
@@ -299,20 +310,18 @@ def main():
             completed += 1
             
             # Count results
-            if result['status'] == 'success':
-                success_count += 1
-                if completed <= 3:  # Show fewer successes for speed
-                    log_message(f"SUCCESS: {result['file']} -> {result['new_date']}")
-            elif result['status'] == 'already_set':
-                already_set_count += 1
+            if result['status'] == 'updated':  # Changed from 'success'
+                updated_count += 1
+                if completed <= 5:  # Show more examples since we're always updating
+                    log_message(f"UPDATED: {result['file']} -> {result['new_date']}")
             elif result['status'] == 'skipped':
                 skipped_count += 1
             elif result['status'] in ['failed', 'error']:
                 failed_count += 1
-                if failed_count <= 2:  # Show fewer failures for speed
+                if failed_count <= 3:  # Show more failures for debugging
                     log_message(f"ERROR: {result['file']} - {result.get('error', 'Unknown error')}")
             
-            # Less frequent progress updates
+            # Progress updates
             if completed % 100 == 0 or completed == len(pairs):
                 elapsed = time.time() - process_start
                 rate = completed / elapsed
@@ -323,10 +332,9 @@ def main():
     total_time = time.time() - overall_start
     
     print("\n" + "="*70)
-    log_message("🚀 ULTRA-FAST IMMICH TAKEOUT FIX SUMMARY")
+    log_message("🚀 FORCE OVERWRITE IMMICH TAKEOUT FIX SUMMARY")
     print("="*70)
-    log_message(f"✅ Files updated successfully: {success_count}")
-    log_message(f"🔄 Files already correctly set: {already_set_count}")
+    log_message(f"⚡ Files force-updated with JSON dates: {updated_count}")
     log_message(f"❌ Files failed to update: {failed_count}")
     log_message(f"⏭️  Files skipped (no JSON date): {skipped_count}")
     log_message(f"📊 Total image+json pairs: {len(pairs)}")
@@ -335,8 +343,9 @@ def main():
     log_message(f"🕐 Total time: {total_time:.1f} seconds")
     print("="*70)
     
-    if success_count > 0:
-        print(f"\n🚀 ULTRA-FAST SUCCESS! Updated {success_count} files in {total_time:.1f} seconds!")
+    if updated_count > 0:
+        print(f"\n🚀 FORCE OVERWRITE SUCCESS! Updated {updated_count} files in {total_time:.1f} seconds!")
+        print(f"📅 All dates now match Google Takeout JSON photoTakenTime!")
 
 if __name__ == '__main__':
     main()
