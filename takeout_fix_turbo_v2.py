@@ -63,7 +63,7 @@ def find_json_file(image_path):
     return best_match
 
 def get_date_from_json(json_path):
-    """Extract photoTakenTime from JSON file (optimized)"""
+    """Extract photoTakenTime from JSON file and format for EXIF"""
     try:
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -73,18 +73,22 @@ def get_date_from_json(json_path):
         
         if timestamp:
             dt = datetime.fromtimestamp(int(timestamp))
-            return dt.strftime('%Y:%m:%d %H:%M:%S')
+            # Return both standard format and subsecond format
+            standard_format = dt.strftime('%Y:%m:%d %H:%M:%S')
+            subsec_format = dt.strftime('%Y:%m:%d %H:%M:%S.000')  # Add milliseconds
+            return standard_format, subsec_format
         
-        return None
-    except:
-        return None
+        return None, None
+    except Exception as e:
+        log_message(f"ERROR reading JSON {json_path}: {str(e)[:50]}")
+        return None, None
 
 def check_and_update_single_image(args):
-    """Process a single image - designed for multiprocessing"""
+    """Process a single image - targeting Immich's priority EXIF tags"""
     image_path, json_path, process_id = args
     
     try:
-        # Check current date
+        # Check current DateTimeOriginal (Immich's #2 priority)
         result = subprocess.run(
             ['exiftool', '-DateTimeOriginal', '-s', '-s', '-s', image_path],
             capture_output=True, text=True, timeout=10
@@ -92,7 +96,7 @@ def check_and_update_single_image(args):
         current_date = result.stdout.strip() if result.returncode == 0 else None
         
         # Get JSON date
-        json_date = get_date_from_json(json_path)
+        json_date, json_date_subsec = get_date_from_json(json_path)
         if not json_date:
             return {'status': 'skipped', 'reason': 'no_json_date', 'file': os.path.basename(image_path)}
         
@@ -100,11 +104,26 @@ def check_and_update_single_image(args):
         if current_date and current_date == json_date:
             return {'status': 'already_set', 'file': os.path.basename(image_path)}
         
-        # Update metadata
+        # Update metadata - TARGET IMMICH'S EXACT PRIORITY ORDER
         cmd = [
             'exiftool', '-overwrite_original', '-P',
+            # Immich Priority #1: SubSecDateTimeOriginal
+            f'-SubSecDateTimeOriginal={json_date_subsec}',
+            # Immich Priority #2: DateTimeOriginal  
             f'-DateTimeOriginal={json_date}',
+            # Immich Priority #3: SubSecCreateDate
+            f'-SubSecCreateDate={json_date_subsec}',
+            # Immich Priority #4: CreationDate
+            f'-CreationDate={json_date}',
+            # Immich Priority #5: CreateDate
             f'-CreateDate={json_date}',
+            # Immich Priority #6: SubSecMediaCreateDate
+            f'-SubSecMediaCreateDate={json_date_subsec}',
+            # Immich Priority #7: MediaCreateDate  
+            f'-MediaCreateDate={json_date}',
+            # Immich Priority #8: DateTimeCreated
+            f'-DateTimeCreated={json_date}',
+            # Additional common tags for compatibility
             f'-DateTime={json_date}',
             f'-DateTimeDigitized={json_date}',
             image_path
@@ -138,7 +157,7 @@ def scan_directory_fast(directory):
     """Fast directory scanning with early filtering"""
     log_message("INFO: Fast scanning directory structure...")
     
-    image_extensions = {'.jpg', '.jpeg', '.png'}
+    image_extensions = {'.dng', '.jpg', '.jpeg', '.png', '.heic', '.heif', '.tiff', '.webp', '.bmp', '.mp4', '.gif', '.3gpp'}  # Added .gif and .3gpp
     image_files = []
     
     start_time = time.time()
@@ -154,7 +173,7 @@ def scan_directory_fast(directory):
                     image_files.append(os.path.join(root, file))
     
     scan_time = time.time() - start_time
-    log_message(f"INFO: Scanned {len(image_files)} images in {scan_time:.1f} seconds")
+    log_message(f"INFO: Scanned {len(image_files)} images/videos in {scan_time:.1f} seconds")
     
     return image_files
 
@@ -190,21 +209,29 @@ def find_image_json_pairs_fast(image_files):
     return pairs
 
 def main():
-    """Turbo-charged main function with multiprocessing"""
+    """Turbo-charged main function optimized for Immich"""
     
     # --------------- Configuration --------------- #
-    directory = r"C:\Takeout"  # Change this to your target directory
+    directory = r"C:\GP"  # Change this to your target directory
     max_workers = min(cpu_count(), 8)  # Limit to avoid overwhelming exiftool
     # --------------- Configuration --------------- #
-<<<<<<< HEAD
     
-=======
->>>>>>> e8693b866aa7fe7a154122322ad039f6f70a6daf
-    log_message("INFO: Starting TURBO Windows Date Taken fix")
+    log_message("INFO: ==========================================")
+    log_message("INFO: IMMICH-OPTIMIZED TAKEOUT DATE FIX TURBO")
+    log_message("INFO: ==========================================")
     log_message("INFO: Current user: eekanti")
-    log_message("INFO: Current UTC time: 2025-06-03 22:40:54")
+    log_message("INFO: Current UTC time: 2025-06-04 02:27:01")
     log_message(f"INFO: Using {max_workers} parallel workers")
     log_message(f"INFO: CPU count: {cpu_count()}")
+    log_message("INFO: Targeting Immich's priority EXIF tags:")
+    log_message("INFO:   1. SubSecDateTimeOriginal")
+    log_message("INFO:   2. DateTimeOriginal") 
+    log_message("INFO:   3. SubSecCreateDate")
+    log_message("INFO:   4. CreationDate")
+    log_message("INFO:   5. CreateDate")
+    log_message("INFO:   6. SubSecMediaCreateDate")
+    log_message("INFO:   7. MediaCreateDate")
+    log_message("INFO:   8. DateTimeCreated")
     
     # Test exiftool
     try:
@@ -212,7 +239,8 @@ def main():
         if result.returncode == 0:
             log_message(f"INFO: ExifTool version {result.stdout.strip()} found")
         else:
-            log_message("ERROR: ExifTool not found")
+            log_message("ERROR: ExifTool not found in PATH")
+            log_message("ERROR: Please ensure exiftool.exe is in your PATH or Scripts directory")
             return
     except:
         log_message("ERROR: ExifTool not available")
@@ -283,21 +311,27 @@ def main():
     # Final summary
     total_time = time.time() - overall_start
     
-    print("\n" + "="*60)
-    log_message("TURBO WINDOWS DATE TAKEN FIX SUMMARY")
-    log_message(f"Files updated successfully: {success_count}")
-    log_message(f"Files already correctly set: {already_set_count}")
-    log_message(f"Files failed to update: {failed_count}")
-    log_message(f"Files skipped (no JSON date): {skipped_count}")
-    log_message(f"Total image+json pairs: {len(pairs)}")
-    log_message(f"Total images scanned: {len(image_files)}")
-    log_message(f"Processing rate: {len(pairs)/total_time:.1f} files/second")
-    log_message(f"Total time: {total_time:.1f} seconds")
-    print("="*60)
+    print("\n" + "="*70)
+    log_message("🎯 IMMICH-OPTIMIZED TAKEOUT FIX SUMMARY")
+    print("="*70)
+    log_message(f"✅ Files updated successfully: {success_count}")
+    log_message(f"🔄 Files already correctly set: {already_set_count}")
+    log_message(f"❌ Files failed to update: {failed_count}")
+    log_message(f"⏭️  Files skipped (no JSON date): {skipped_count}")
+    log_message(f"📊 Total image+json pairs: {len(pairs)}")
+    log_message(f"📁 Total images scanned: {len(image_files)}")
+    log_message(f"⚡ Processing rate: {len(pairs)/total_time:.1f} files/second")
+    log_message(f"🕐 Total time: {total_time:.1f} seconds")
+    print("="*70)
     
     if success_count > 0:
-        print(f"\n🚀 TURBO SUCCESS! Updated {success_count} files in {total_time:.1f} seconds!")
-        print("To verify: Right-click any photo → Properties → Details → Check 'Date taken'")
+        print(f"\n🚀 IMMICH SUCCESS! Updated {success_count} files in {total_time:.1f} seconds!")
+        print("📸 Photos are now optimized for Immich's date detection algorithm!")
+        print("🎯 All 8 priority EXIF tags have been set from photoTakenTime")
+        print("\n📋 Next Steps:")
+        print("   1. Import these photos to Immich")
+        print("   2. Verify dates appear correctly in timeline")
+        print("   3. Check photo details show proper 'Date taken'")
 
 if __name__ == '__main__':
     # Clear JSON cache on startup
